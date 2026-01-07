@@ -1,28 +1,40 @@
 #[allow(unused_imports)]
+use std::str::FromStr;
 use std::io::{self, Write};
 
-// enum Commands {
-//     Unknown,
-// }
+enum Commands {
+    Exit,
+    Unknown,
+}
+
+impl FromStr for Commands {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Commands, ()>{
+        match s {
+            "exit" => Ok(Commands::Exit),
+            _ => Ok(Commands::Unknown),
+        }
+    }
+}
 
 fn main() {
-    // TODO: Uncomment the code below to pass the first stage
     loop {
-
         let mut input = String::new();
         print!("$ ");
         io::stdout().flush().unwrap();
         io::stdin().read_line(&mut input).unwrap();
 
-        let Some(command) = input.split_whitespace().next() else {
+        let Some(raw_input) = input.split_whitespace().next() else {
             continue;
         };
 
-        match command.trim() {
-            _ => {
-                println!("{}: command not found", command.trim());
+        // Convertimos el &str al enum Commands
+        if let Ok(command) = Commands::from_str(raw_input) {
+            match command {
+                Commands::Exit => std::process::exit(0),
+                Commands::Unknown => println!("{}: command not found", raw_input),
             }
         }
     }
-
 }
