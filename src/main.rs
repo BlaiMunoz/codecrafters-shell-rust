@@ -1,6 +1,8 @@
 #[allow(unused_imports)]
 use std::str::FromStr;
 use std::io::{self, Write};
+use std::env;
+use std::os::unix::fs::PermissionsExt;
 
 enum Commands {
     Echo,
@@ -30,7 +32,28 @@ impl Commands {
         for cmd in command {
             match Commands::from_str(cmd) {
                 Ok(_) => println!("{} is a shell builtin", cmd),
-                Err(_) => println!("{}: not found", cmd),
+                Err(_) => {
+                    let mut found = false;
+                    if let Ok(path) = env::var("PATH") {
+                        for ruta in env::split_paths(&path) {
+                            let ruta_completa = ruta.join(cmd);
+                            
+                            if let Ok(metadata) = std::fs::metadata(&ruta_completa) {
+                                let modo = metadata.permissions().mode();
+                                let es_ejecutable = modo & 0o111 != 0;
+    
+                                if metadata.is_file() && es_ejecutable {
+                                    println!("{} is {}", cmd, ruta_completa.display());
+                                    found = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if !found {
+                        println!("{}: not found", cmd);
+                    }
+                }
             }
         }
     }
