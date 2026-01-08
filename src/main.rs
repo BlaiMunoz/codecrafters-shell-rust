@@ -1,7 +1,7 @@
-#[allow(unused_imports)]
-use std::str::FromStr;
-use std::io::{self, Write};
 use std::env;
+use std::io::{self, Write};
+use std::process::Command;
+use std::str::FromStr;
 use std::os::unix::fs::PermissionsExt;
 
 enum Commands {
@@ -23,70 +23,83 @@ impl FromStr for Commands {
     }
 }
 
+fn is_executable(path: &std::path::Path) -> bool {
+    #[cfg(unix)]
+    {
+        std::fs::metadata(path)
+            .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+    }
+}
+
+fn find_in_path(cmd: &str) -> Option<std::path::PathBuf> {
+    let path_var = env::var_os("PATH")?;
+    for path in env::split_paths(&path_var) {
+        let full_path = path.join(cmd);
+        if is_executable(&full_path) { // Usamos la nueva comprobacion
+            return Some(full_path);
+        }
+    }
+    None
+}
+
 impl Commands {
-    fn echo_cmd(message: String) {
-        println!("{}", message);
+    fn echo_cmd(parameters: &[&str]) {
+        println!("{}", parameters.join(" "));
     }
 
-    fn type_cmd(command: &[&str]) {
-        for cmd in command {
-            match Commands::from_str(cmd) {
-                Ok(_) => println!("{} is a shell builtin", cmd),
-                Err(_) => {
-                    let mut found = false;
-                    if let Ok(path) = env::var("PATH") {
-                        for ruta in env::split_paths(&path) {
-                            let ruta_completa = ruta.join(cmd);
-                            
-                            if let Ok(metadata) = std::fs::metadata(&ruta_completa) {
-                                let modo = metadata.permissions().mode();
-                                let es_ejecutable = modo & 0o111 != 0;
-    
-                                if metadata.is_file() && es_ejecutable {
-                                    println!("{} is {}", cmd, ruta_completa.display());
-                                    found = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if !found {
-                        println!("{}: not found", cmd);
-                    }
-                }
+    fn type_cmd(parameters: &[&str]) {
+        for cmd in parameters {
+            if Commands::from_str(cmd).is_ok() {
+                println!("{} is a shell builtin", cmd);
+            } else if let Some(path) = find_in_path(cmd) {
+                println!("{} is {}", cmd, path.display());
+            } else {
+                println!("{}: not found", cmd);
             }
         }
     }
 
     fn exit_cmd() {
-        std::process::exit(0)
+        std::process::exit(0);
     }
 }
 
 fn main() {
     loop {
-        let mut input = String::new();
         print!("$ ");
         io::stdout().flush().unwrap();
+
+        let mut input = String::new();
         io::stdin().read_line(&mut input).unwrap();
         
-        let resultado: Vec<&str> = input.split_whitespace().collect();
-        if resultado.len() == 0 {
-            continue;
-        };
-        
-        let command_raw = &resultado[0];
-        let parameters = &resultado[1..];
+        let parts: Vec<&str> = input.split_whitespace().collect();
+        if parts.is_empty() { continue; }
 
-        // Convertimos el &str al enum Commands
-        if let Ok(command) = Commands::from_str(command_raw) {
-            match command {
-                Commands::Echo => Commands::echo_cmd(parameters.join(" ")),
-                Commands::Type => Commands::type_cmd(parameters),
+        let cmd_name = parts[0];
+        let args = &parts[1..];
+
+        // 1. Intentar ejecutar comando interno (builtin)
+        if let Ok(builtin) = Commands::from_str(cmd_name) {
+            match builtin {
+                Commands::Echo => Commands::echo_cmd(args),
+                Commands::Type => Commands::type_cmd(args),
                 Commands::Exit => Commands::exit_cmd(),
             }
-        }else{
-            println!("{}: command not found ", command_raw);
+        } 
+        // 2. Intentar ejecutar comando externo (ej. ls, cat, git)
+        else if let Some(_) = find_in_path(cmd_name) {
+            let status = Command::new(cmd_name)
+                .args(args)
+                .status(); // Ejecuta y espera a que termine
+
+            if let Err(e) = status {
+                eprintln!("Error ejecutando {}: {}", cmd_name, e);
+            }
+        } 
+        // 3. Comando no encontrado
+        else {
+            println!("{}: command not found", cmd_name);
         }
     }
 }
