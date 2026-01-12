@@ -88,8 +88,8 @@ fn main() {
             }
         } 
         // 2. Intentar ejecutar comando externo (ej. ls, cat, git)
-        else if let Some(path) = find_in_path(cmd_name) {
-            let status = Command::new(path)
+        else if let Some(_) = find_in_path(cmd_name) {
+            let status = Command::new(cmd_name)
                 .args(args)
                 .status(); // Ejecuta y espera a que termine
 
