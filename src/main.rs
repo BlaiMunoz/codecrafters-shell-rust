@@ -3,11 +3,13 @@ use std::io::{self, Write};
 use std::process::Command;
 use std::str::FromStr;
 use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
 
 enum Commands {
     Echo,
     Type,
     Pwd,
+    Cd,
     Exit,
 }
 
@@ -19,6 +21,7 @@ impl FromStr for Commands {
             "echo" => Ok(Commands::Echo),
             "type" => Ok(Commands::Type),
             "pwd" => Ok(Commands::Pwd),
+            "cd" => Ok(Commands::Cd),
             "exit" => Ok(Commands::Exit),
             _ => Err(()),
         }
@@ -67,6 +70,28 @@ impl Commands {
         println!("{}", path.unwrap().display());
     }
 
+    fn cd_cmd(parameters: &[&str]) {
+        if parameters.is_empty() { return; }
+    
+        let raw_path = parameters[0];
+    
+        let root = if raw_path.starts_with("~") {
+            let Some(home) = env::home_dir() else { return };
+            
+            match raw_path.strip_prefix("~/") {
+                Some(rest) => home.join(rest),
+                None => home,
+            }
+        } else {
+            PathBuf::from(raw_path)
+        };
+    
+        if env::set_current_dir(&root).is_err() {
+            eprintln!("cd: {}: No such file or directory", raw_path);
+        }
+    }
+
+
     fn exit_cmd() {
         std::process::exit(0);
     }
@@ -92,6 +117,7 @@ fn main() {
                 Commands::Echo => Commands::echo_cmd(args),
                 Commands::Type => Commands::type_cmd(args),
                 Commands::Pwd => Commands::pwd_cmd(),
+                Commands::Cd => Commands::cd_cmd(args),
                 Commands::Exit => Commands::exit_cmd(),
             }
         } 
