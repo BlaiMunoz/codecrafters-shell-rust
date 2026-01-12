@@ -7,6 +7,7 @@ use std::os::unix::fs::PermissionsExt;
 enum Commands {
     Echo,
     Type,
+    Pwd,
     Exit,
 }
 
@@ -17,6 +18,7 @@ impl FromStr for Commands {
         match s {
             "echo" => Ok(Commands::Echo),
             "type" => Ok(Commands::Type),
+            "pwd" => Ok(Commands::Pwd),
             "exit" => Ok(Commands::Exit),
             _ => Err(()),
         }
@@ -60,6 +62,11 @@ impl Commands {
         }
     }
 
+    fn pwd_cmd() {
+        let path = env::current_dir();
+        println!("{}", path.unwrap().display());
+    }
+
     fn exit_cmd() {
         std::process::exit(0);
     }
@@ -84,6 +91,7 @@ fn main() {
             match builtin {
                 Commands::Echo => Commands::echo_cmd(args),
                 Commands::Type => Commands::type_cmd(args),
+                Commands::Pwd => Commands::pwd_cmd(),
                 Commands::Exit => Commands::exit_cmd(),
             }
         } 
@@ -91,7 +99,7 @@ fn main() {
         else if let Some(_) = find_in_path(cmd_name) {
             let status = Command::new(cmd_name)
                 .args(args)
-                .status(); // Ejecuta y espera a que termine
+                .status();
 
             if let Err(e) = status {
                 eprintln!("Error ejecutando {}: {}", cmd_name, e);
